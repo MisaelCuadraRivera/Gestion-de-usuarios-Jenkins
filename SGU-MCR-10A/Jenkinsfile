@@ -23,27 +23,33 @@ pipeline {
       }
     }
 
-    stage('Preflight Docker') {
-      steps {
-        sh '''
-          set -e
-          which docker || true
-          docker --version || true
-          # Detecta compose v2 o v1 y exporta DC
-          if docker compose version >/dev/null 2>&1; then
-            echo "Usando Compose v2"
-            echo "DC='docker compose'" > .dc.env
-          elif command -v docker-compose >/dev/null 2>&1; then
-            echo "Usando docker-compose (v1 legacy)"
-            echo "DC='docker-compose'" > .dc.env
-          else
-            echo "ERROR: no se encontró docker compose (ni v2 ni v1) en PATH"
-            exit 127
-          fi
-          echo "PATH=$PATH"
-        '''
-      }
+stage('Preflight Docker') {
+  steps {
+    dir(env.PROJECT_DIR) {
+      sh '''
+        set -e
+        which docker || true
+        docker --version || true
+
+        # Detecta compose v2 o v1 y guarda el alias en ESTA carpeta
+        if docker compose version >/dev/null 2>&1; then
+          echo "Usando Compose v2"
+          echo "DC='docker compose'" > .dc.env
+        elif command -v docker-compose >/dev/null 2>&1; then
+          echo "Usando docker-compose (v1 legacy)"
+          echo "DC='docker-compose'" > .dc.env
+        else
+          echo "ERROR: no se encontró docker compose (ni v2 ni v1) en PATH"
+          exit 127
+        fi
+
+        echo "PATH=$PATH"
+        echo "Contenido .dc.env:"
+        cat .dc.env
+      '''
     }
+  }
+}
 
     stage('Limpiar Contenedores Anteriores') {
       steps {
