@@ -1,0 +1,58 @@
+services:
+  database:
+    image: mysql:8
+    container_name: sgu-database
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: sgudatabase
+    ports:
+      - "3306:3306"
+    volumes:
+      - sgu-volume:/var/lib/mysql
+    networks:
+      - sgu-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: sgu-backend
+    image: server:1.0-sgu
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://database:3306/sgudatabase?allowPublicKeyRetrieval=true&useSSL=false
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - sgu-net
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: sgu-frontend
+    image: client:1.0-sgu
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - sgu-net
+
+networks:
+  sgu-net:
+    name: sgu-net
+
+volumes:
+  sgu-volume:
+    name: sgu-volume
+

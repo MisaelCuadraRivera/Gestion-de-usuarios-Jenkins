@@ -1,0 +1,162 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_IMAGE_BACKEND = 'server:1.0-sgu'
+        DOCKER_IMAGE_FRONTEND = 'client:1.0-sgu'
+        CONTAINER_BACKEND = 'sgu-backend'
+        CONTAINER_FRONTEND = 'sgu-frontend'
+        CONTAINER_DATABASE = 'sgu-database'
+        NETWORK_NAME = 'sgu-net'
+        VOLUME_NAME = 'sgu-volume'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Obteniendo código del repositorio...'
+                checkout scm
+            }
+        }
+        
+        stage('Limpiar Contenedores Anteriores') {
+            steps {
+                script {
+                    echo 'Deteniendo y eliminando contenedores anteriores...'
+                    try {
+                        sh '''
+                            docker-compose down -v || true
+                            docker stop ${CONTAINER_BACKEND} ${CONTAINER_FRONTEND} ${CONTAINER_DATABASE} || true
+                            docker rm ${CONTAINER_BACKEND} ${CONTAINER_FRONTEND} ${CONTAINER_DATABASE} || true
+                        '''
+                    } catch (e) {
+                        echo "No se encontraron contenedores previos: ${e.message}"
+                    }
+                }
+            }
+        }
+        
+        stage('Limpiar Imágenes Anteriores') {
+            steps {
+                script {
+                    echo 'Eliminando imágenes anteriores...'
+                    sh '''
+                        docker rmi ${DOCKER_IMAGE_BACKEND} || true
+                        docker rmi ${DOCKER_IMAGE_FRONTEND} || true
+                    '''
+                }
+            }
+        }
+        
+        stage('Construir Imágenes') {
+            steps {
+                script {
+                    echo 'Construyendo imágenes Docker...'
+                    sh 'docker-compose build --no-cache'
+                }
+            }
+        }
+        
+        stage('Levantar Servicios') {
+            steps {
+                script {
+                    echo 'Levantando servicios con docker-compose...'
+                    sh 'docker-compose up -d'
+                }
+            }
+        }
+        
+        stage('Verificar Servicios') {
+            steps {
+                script {
+                    echo 'Esperando que los servicios estén listos...'
+                    sleep(time: 30, unit: 'SECONDS')
+                    
+                    echo 'Verificando contenedores...'
+                    sh '''
+                        echo "Contenedores en ejecución:"
+                        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                        
+                        echo "Verificando contenedor de base de datos..."
+                        docker logs ${CONTAINER_DATABASE} | tail -20
+                        
+                        echo "Verificando contenedor de backend..."
+                        docker logs ${CONTAINER_BACKEND} | tail -20
+                        
+                        echo "Verificando contenedor de frontend..."
+                        docker logs ${CONTAINER_FRONTEND} | tail -20
+                    '''
+                }
+            }
+        }
+        
+        stage('Health Check') {
+            steps {
+                script {
+                    echo 'Realizando health check de los servicios...'
+                    
+                    sh '''
+                        echo "Verificando base de datos..."
+                        docker exec ${CONTAINER_DATABASE} mysqladmin ping -h localhost -u root -prootpassword || echo "Base de datos no responde"
+                        
+                        echo "Verificando backend..."
+                        curl -f http://localhost:8080/actuator/health || echo "Backend no responde (esto es normal si no hay actuator)"
+                        
+                        echo "Verificando frontend..."
+                        curl -f http://localhost:80 || echo "Frontend no responde"
+                    '''
+                }
+            }
+        }
+        
+        stage('Validar API') {
+            steps {
+                script {
+                    echo 'Validando endpoints del API...'
+                    
+                    sh '''
+                        echo "Esperando adicionalmente que el backend esté completamente listo..."
+                        sleep 20
+                        
+                        echo "Verificando endpoint GET /api/usuarios..."
+                        curl -X GET http://localhost:8080/api/usuarios || true
+                        
+                        echo "Verificando que el frontend esté accesible..."
+                        curl -I http://localhost:80 || true
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Pipeline ejecutado exitosamente'
+            echo '''
+                Servicios desplegados:
+                - Frontend: http://localhost:80
+                - Backend API: http://localhost:8080/api/usuarios
+                - Base de datos: localhost:3306
+            '''
+        }
+        failure {
+            echo 'Pipeline falló'
+            script {
+                sh '''
+                    echo "Estado de los contenedores:"
+                    docker ps -a
+                    
+                    echo "Logs del backend:"
+                    docker logs ${CONTAINER_BACKEND} || true
+                    
+                    echo "Logs del frontend:"
+                    docker logs ${CONTAINER_FRONTEND} || true
+                '''
+            }
+        }
+        always {
+            echo 'Pipeline finalizado'
+        }
+    }
+}
+

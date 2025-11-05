@@ -1,0 +1,25 @@
+# Node
+node_modules
+npm-debug.log
+client/build
+client/.npm
+
+# Maven
+server/target
+server/.mvn
+
+# Git
+.git
+.gitignore
+
+# IDEs
+.idea
+.vscode
+
+# OS
+.DS_Store
+
+# Documentation
+*.md
+README.md
+

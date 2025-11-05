@@ -1,0 +1,30 @@
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# Node
+client/node_modules/
+client/build/
+client/.npm
+client/.cache
+
+# Maven
+server/target/
+server/.mvn/
+server/logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# Spring Boot
+server/application-dev.properties
+server/logs/
+
